@@ -134,12 +134,17 @@ void uart_task(void *p) {
     adc_t adc;
     while (1) {
         if (xQueueReceive(xQueueAdc, &adc, portMAX_DELAY)) {
-            if (adc.axis == 1) {
+            if (adc.axis == 5) {
+                if (adc.val == 1) {
+                    putchar('q');
+                }
+            }
+            else if (adc.axis == 1) {
                 if (adc.val > 200) {
-                    putchar('w');  // stick para cima
+                    putchar('s');  // stick para cima
                 }
                 else if (adc.val < -200) {
-                    putchar('s');  // stick para baixo
+                    putchar('w');  // stick para baixo
                 }
             }
             else if (adc.axis == 0) {

@@ -6,8 +6,10 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from time import sleep
+import time
 
-ser = serial.Serial('/dev/ttyACM0', 115200)
+
+# ser = serial.Serial('/dev/ttyACM13', 115200)
 
 def move_mouse(axis, value):
     """Move o mouse de acordo com o eixo e valor recebidos."""
@@ -21,11 +23,25 @@ def controle(ser):
     Loop principal que lê bytes da porta serial em loop infinito.
     Pode receber:
       1) Um sync byte 0xFF seguido de 3 bytes (axis + valor baixo + valor alto);
-      2) Uma tecla ASCII: 'w', 'a', 's' ou 'd'.
+      2) Uma tecla ASCII: 'w', 'a', 's', 'd' ou 'q' (seu botão Troca mapeado como 'q').
+    Além disso, simula keyDown/Up para WASD e para q.
     """
+    pressed = set()
+    last_time = {}
+    RELEASE_DELAY = 0.2
+
+    ser.timeout = 0.05
+
     while True:
-        b = ser.read(size=1)
+        b = ser.read(1)
+        now = time.time()
+
         if not b:
+            for key in list(pressed):
+                if now - last_time.get(key, 0) > RELEASE_DELAY:
+                    pyautogui.keyUp(key)
+                    pressed.remove(key)
+                    print(f"SOLTO: {key}")
             continue
 
         try:
@@ -33,15 +49,20 @@ def controle(ser):
         except UnicodeDecodeError:
             char = None
 
-        if char in ('w', 'a', 's', 'd'):
-            pyautogui.press(char)
-            print(f"TECLA: {char}")
+        if char in ('q', 'w', 'a', 's', 'd'):
+            last_time[char] = now
+            if char not in pressed:
+                pyautogui.keyDown(char)
+                pressed.add(char)
+                print(f"PRESSIONADO: {char}")
             continue
 
+        # Se não for ASCII de interesse, deve ser pacote binário
         if b[0] != 0xFF:
             continue
 
-        data = ser.read(size=3)
+        # Lê axis + valor_low + valor_high
+        data = ser.read(3)
         if len(data) < 3:
             continue
 

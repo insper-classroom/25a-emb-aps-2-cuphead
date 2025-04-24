@@ -10,7 +10,7 @@
  #include "hardware/gpio.h"
  #include "pico/stdlib.h"
  #include <stdio.h>
-  
+ 
  const int BTN_LIGA   = 15; // branco
  const int BTN_TROCA  = 13; // azul
  const int BTN_ATIRA  = 11; // verde
@@ -18,16 +18,16 @@
  const int BTN_PAUSA  = 12; // amarelo
  const int LED_LIGA   = 10;
  const int VIBRADOR   = 9;
-  
+ 
  QueueHandle_t      xQueueAdc;
  SemaphoreHandle_t  xEnableSemaphore;
  SemaphoreHandle_t  xVibeSemaphore;
-  
+ 
  typedef struct {
      int axis;
      int val;
  } adc_t;
-  
+ 
  // Task X (ADC channel 1 on GPIO 27)
  void adc_x_task(void *p) {
      int dataList[5] = {0};
@@ -56,7 +56,7 @@
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
-  
+ 
  void adc_y_task(void *p) {
      int dataList[5] = {0};
      int index = 0, sum = 0, count = 0;
@@ -86,7 +86,7 @@
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
-  
+ 
  void desh_y_task(void *p) {
      int dataList[5] = {0};
      int index = 0, sum = 0, count = 0;
@@ -116,7 +116,7 @@
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
-  
+ 
  void led_task(void *p) {
      while (1) {
          if (xSemaphoreTake(xEnableSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -127,18 +127,18 @@
          }
      }
  }
-  
- // Vibrator Task: vibra ao receber sinal de 'q' pressionado
+ 
+ // Vibrator Task: vibra ao receber sinal de semáforo
  void vibrate_task(void *p) {
      while (1) {
          if (xSemaphoreTake(xVibeSemaphore, portMAX_DELAY) == pdTRUE) {
              gpio_put(VIBRADOR, 1);
-             vTaskDelay(pdMS_TO_TICKS(200)); // tempo de vibração
+             vTaskDelay(pdMS_TO_TICKS(3000)); 
              gpio_put(VIBRADOR, 0);
          }
      }
  }
-  
+ 
  void uart_task(void *p) {
      adc_t adc;
  
@@ -160,14 +160,26 @@
          }
          xSemaphoreGive(xEnableSemaphore);
  
-         if (adc.axis == 5) { // q
+         if (adc.axis == 5) { // BTN_TROCA (azul)
              putchar('q'); putchar(adc.val ? '1' : '2');
-             if (adc.val == 1) xSemaphoreGive(xVibeSemaphore);
+             if (adc.val == 1) xSemaphoreGive(xVibeSemaphore); // opcional: azul vibra também
              continue;
          }
-         if (adc.axis == 6) { putchar('e'); putchar(adc.val ? '1' : '2'); continue; }
-         if (adc.axis == 7) { putchar('r'); putchar(adc.val ? '1' : '2'); continue; }
-         if (adc.axis == 8) { putchar('u'); putchar(adc.val ? '1' : '2'); continue; }
+         if (adc.axis == 6) { // BTN_ATIRA (verde)
+             putchar('e'); putchar(adc.val ? '1' : '2');
+             continue;
+         }
+         if (adc.axis == 7) { // BTN_PIKA (vermelho)
+             putchar('r'); putchar(adc.val ? '1' : '2');
+             if (adc.val == 1) {
+                 xSemaphoreGive(xVibeSemaphore); // dispara vibração ao pressionar vermelho
+             }
+             continue;
+         }
+         if (adc.axis == 8) { // BTN_PAUSA (amarelo)
+             putchar('u'); putchar(adc.val ? '1' : '2');
+             continue;
+         }
          if (adc.axis == 1) {
              if (adc.val > 200) putchar('s');
              if (adc.val < -200) putchar('w');
@@ -185,7 +197,7 @@
          }
      }
  }
-  
+ 
  void btn_callback(uint gpio, uint32_t events) {
      uint8_t axis;
      if (gpio == BTN_LIGA)      axis = 4;
@@ -211,7 +223,7 @@
          xQueueSendFromISR(xQueueAdc, &ev, NULL);
      }
  }
-  
+ 
  int main() {
      stdio_init_all();
  

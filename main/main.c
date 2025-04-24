@@ -86,7 +86,7 @@
          index = (index + 1) % 5;
          int mediamovel = sum / 5;
  
-         if (mediamovel < -90 && mediamovel > 90) {
+         if (mediamovel < -90 || mediamovel > 90) {
              adc_t adc = { .axis = 1, .val = mediamovel };
              if (adc.val != 0) {
                  xQueueSend(xQueueAdc, &adc, 0);

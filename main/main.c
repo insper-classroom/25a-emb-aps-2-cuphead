@@ -16,8 +16,10 @@
  const int BTN_ATIRA = 11; // verde
  const int BTN_PIKA  = 14; // vermelho
  const int BTN_PAUSA = 12; // amarelo
+ const int LED_LIGA = 10;
  
  QueueHandle_t xQueueAdc;
+ SemaphoreHandle_t  xEnableSemaphore;
  
  typedef struct {
      int axis;
@@ -95,6 +97,23 @@
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
+
+ void led_task(void *p) {
+    while (1) {
+       
+        if (xSemaphoreTake(xEnableSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
+            
+            gpio_put(LED_LIGA, 1);
+        
+            xSemaphoreGive(xEnableSemaphore);
+        } else {
+           
+            gpio_put(LED_LIGA, 0);
+        }
+       
+    }
+}
+
  
  // Task Deslizador Y (ADC channel 2 on GPIO 28)
  void desh_y_task(void *p) {
@@ -130,67 +149,70 @@
      }
  }
 
-void uart_task(void *p) {
+ void uart_task(void *p) {
     adc_t adc;
-    while (1) {
-        if (xQueueReceive(xQueueAdc, &adc, portMAX_DELAY)) {
-            if (adc.axis == 5) {
-                // branco → q
-                putchar('q');
-                putchar(adc.val ? '1' : '2');
-                continue;
-            }
-    
-            if (adc.axis == 6) {
-                // azul → e
-                putchar('e');
-                putchar(adc.val ? '1' : '2');
-                continue;
-            }
-    
-            if (adc.axis == 7) {
-                // verde → r
-                putchar('r');
-                putchar(adc.val ? '1' : '2');
-                continue;
-            }
-    
-            if (adc.axis == 8) {
-                // vermelho → u
-                putchar('u');
-                putchar(adc.val ? '1' : '2');
-                continue;
-            }
-            
-            
-            if (adc.axis == 1) {
-                if (adc.val > 200) {
-                    putchar('s');  // stick para cima
-                }
-                else if (adc.val < -200) {
-                    putchar('w');  // stick para baixo
-                }
-            }
-            if (adc.axis == 0) {
-                if (adc.val > 200) {
-                    putchar('d');  // stick para direita
-                }
-                else if (adc.val < -200) {
-                    putchar('a');  // stick para esquerda
-                }
-            }
-            if (adc.axis == 3){
-                if (adc.val > 200){
-                    putchar('j');
-                }
-                else if (adc.val < -200){
-                    putchar('b');
-                }
 
+    while (1) {
+        if (!xQueueReceive(xQueueAdc, &adc, portMAX_DELAY))
+            continue;
+
+        // 1) botão LIGA (axis==4) faz toggle do semáforo:
+        if (adc.axis == 4) {
+            // se estava liberado, toma-o (desliga)
+            if (xSemaphoreTake(xEnableSemaphore, 0) == pdTRUE) {
+                // agora semáforo está “desligado”
+                // (você poderia acionar um LED aqui para feedback)
             }
+            else {
+                // se estava desligado, libera-o (liga)
+                xSemaphoreGive(xEnableSemaphore);
+            }
+            continue;
         }
+
+        // 2) qualquer outro axis só passa se semáforo estiver liberado
+        if (xSemaphoreTake(xEnableSemaphore, 0) != pdTRUE) {
+            // semáforo fechado → ignora evento
+            continue;
+        }
+        // devolve o token para que o semáforo permaneça liberado
+        xSemaphoreGive(xEnableSemaphore);
+
+        // 3) processa os outros botões e sticks normalmente
+        if (adc.axis == 5) {
+            putchar('q'); putchar(adc.val ? '1' : '2');
+            continue;
+        }
+        if (adc.axis == 6) {
+            putchar('e'); putchar(adc.val ? '1' : '2');
+            continue;
+        }
+        if (adc.axis == 7) {
+            putchar('r'); putchar(adc.val ? '1' : '2');
+            continue;
+        }
+        if (adc.axis == 8) {
+            putchar('u'); putchar(adc.val ? '1' : '2');
+            continue;
+        }
+        if (adc.axis == 1) {
+            if (adc.val >  200) putchar('s');
+            if (adc.val < -200) putchar('w');
+            continue;
+        }
+        if (adc.axis == 0) {
+            if (adc.val >  200) putchar('d');
+            if (adc.val < -200) putchar('a');
+            continue;
+        }
+        if (adc.axis == 3) {
+            if (adc.val >  200) putchar('j');
+            if (adc.val < -200) putchar('b');
+            continue;
+        }
+        // qualquer outro axis você pode simplesmente ignorar
     }
-  }
+}
 
 
  
@@ -203,6 +225,13 @@ void uart_task(void *p) {
      else if (gpio == BTN_PIKA)  axis = 7;
      else if (gpio == BTN_PAUSA) axis = 8;
      else return;
+
+     if (axis == 4) {
+        if (events == GPIO_IRQ_EDGE_FALL) {
+            adc_t ev = { .axis = 4, .val = 1 };
+            xQueueSendFromISR(xQueueAdc, &ev, NULL);
+        }
+        return;}
  
      if (events == GPIO_IRQ_EDGE_FALL) {       // borda de descida
          adc_t adc = { .axis = axis, .val = 1 };
@@ -216,7 +245,12 @@ void uart_task(void *p) {
  
  int main() {
      stdio_init_all();
+
+     gpio_init(LED_LIGA);
+     gpio_set_dir(LED_LIGA, GPIO_OUT);
+     gpio_put(LED_LIGA,0);
      xQueueAdc = xQueueCreate(32, sizeof(adc_t));
+     xEnableSemaphore = xSemaphoreCreateBinary();
  
      // Configurações individuais dos botões
      gpio_init(BTN_LIGA);
@@ -275,6 +309,7 @@ void uart_task(void *p) {
      xTaskCreate(adc_y_task,   "adc y task",  4095, NULL, 1, NULL);
      xTaskCreate(uart_task,    "uart task",   4095, NULL, 1, NULL);
      xTaskCreate(desh_y_task,  "adc2 y task", 4095, NULL, 1, NULL);
+     xTaskCreate(led_task, "led task", 4095, NULL, 1, NULL);
  
      vTaskStartScheduler();
  

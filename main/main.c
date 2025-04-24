@@ -10,37 +10,35 @@
  #include "hardware/gpio.h"
  #include "pico/stdlib.h"
  #include <stdio.h>
- 
- const int BTN_LIGA  = 15; // branco
- const int BTN_TROCA = 13; // azul
- const int BTN_ATIRA = 11; // verde
- const int BTN_PIKA  = 14; // vermelho
- const int BTN_PAUSA = 12; // amarelo
- const int LED_LIGA = 10;
- 
- QueueHandle_t xQueueAdc;
+  
+ const int BTN_LIGA   = 15; // branco
+ const int BTN_TROCA  = 13; // azul
+ const int BTN_ATIRA  = 11; // verde
+ const int BTN_PIKA   = 14; // vermelho
+ const int BTN_PAUSA  = 12; // amarelo
+ const int LED_LIGA   = 10;
+ const int VIBRADOR   = 9;
+  
+ QueueHandle_t      xQueueAdc;
  SemaphoreHandle_t  xEnableSemaphore;
- 
+ SemaphoreHandle_t  xVibeSemaphore;
+  
  typedef struct {
      int axis;
      int val;
  } adc_t;
- 
+  
  // Task X (ADC channel 1 on GPIO 27)
  void adc_x_task(void *p) {
      int dataList[5] = {0};
-     int index = 0;
-     int sum = 0;
-     int count = 0;
+     int index = 0, sum = 0, count = 0;
      adc_gpio_init(27);
-
+ 
      while (1) {
          adc_select_input(1);
          uint16_t result = adc_read();
          int16_t raw_value = (result - 2047) / 7.96;
-         if (raw_value > -90 && raw_value < 90) {
-          raw_value = 0;
-         }
+         if (raw_value > -90 && raw_value < 90) raw_value = 0;
          if (count < 5) {
              dataList[index] = raw_value;
              sum += raw_value;
@@ -52,31 +50,23 @@
          index = (index + 1) % 5;
          int mediamovel = sum / 5;
  
-         adc_t adc = { .axis = 0, .val = mediamovel };
-         if (adc.val != 0) {
-             xQueueSend(xQueueAdc, &adc, 0);
-         }
+         adc_t evt = { .axis = 0, .val = mediamovel };
+         if (mediamovel != 0) xQueueSend(xQueueAdc, &evt, 0);
  
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
- 
+  
  void adc_y_task(void *p) {
      int dataList[5] = {0};
-     int index = 0;
-     int sum = 0;
-     int count = 0;
+     int index = 0, sum = 0, count = 0;
      adc_gpio_init(26);
-
+ 
      while (1) {
-
          adc_select_input(0);
          uint16_t result = adc_read();
          int16_t raw_value = (result - 2047) / 7.96;
-         if (raw_value > -90 && raw_value < 90) {
-            raw_value = 0;
-         }
- 
+         if (raw_value > -90 && raw_value < 90) raw_value = 0;
          if (count < 5) {
              dataList[index] = raw_value;
              sum += raw_value;
@@ -89,45 +79,24 @@
          int mediamovel = sum / 5;
  
          if (mediamovel < -90 || mediamovel > 90) {
-             adc_t adc = { .axis = 1, .val = mediamovel };
-             if (adc.val != 0) {
-                 xQueueSend(xQueueAdc, &adc, 0);
-             }
+             adc_t evt = { .axis = 1, .val = mediamovel };
+             xQueueSend(xQueueAdc, &evt, 0);
          }
+ 
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
-
- void led_task(void *p) {
-    while (1) {
-       
-        if (xSemaphoreTake(xEnableSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
-            
-            gpio_put(LED_LIGA, 1);
-        
-            xSemaphoreGive(xEnableSemaphore);
-        } else {
-           
-            gpio_put(LED_LIGA, 0);
-        }
-       
-    }
-}
-
- 
- // Task Deslizador Y (ADC channel 2 on GPIO 28)
+  
  void desh_y_task(void *p) {
      int dataList[5] = {0};
      int index = 0, sum = 0, count = 0;
      adc_gpio_init(28);
-
+ 
      while (1) {
-
          adc_select_input(2);
          uint16_t result = adc_read();
          int16_t raw_value = (result - 2047) / 7.96;
          if (raw_value > -200 && raw_value < 200) raw_value = 0;
- 
          if (count < 5) {
              dataList[index] = raw_value;
              sum += raw_value;
@@ -136,87 +105,87 @@
              sum = sum - dataList[index] + raw_value;
              dataList[index] = raw_value;
          }
-
          index = (index + 1) % 5;
          int mediamovel = sum / 5;
  
-         adc_t adc = { .axis = 3, .val = mediamovel };
-         if (adc.val > 200 || adc.val < -200) {
-             xQueueSend(xQueueAdc, &adc, 0);
+         if (mediamovel > 200 || mediamovel < -200) {
+             adc_t evt = { .axis = 3, .val = mediamovel };
+             xQueueSend(xQueueAdc, &evt, 0);
          }
  
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
-
+  
+ void led_task(void *p) {
+     while (1) {
+         if (xSemaphoreTake(xEnableSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
+             gpio_put(LED_LIGA, 1);
+             xSemaphoreGive(xEnableSemaphore);
+         } else {
+             gpio_put(LED_LIGA, 0);
+         }
+     }
+ }
+  
+ // Vibrator Task: vibra ao receber sinal de 'q' pressionado
+ void vibrate_task(void *p) {
+     while (1) {
+         if (xSemaphoreTake(xVibeSemaphore, portMAX_DELAY) == pdTRUE) {
+             gpio_put(VIBRADOR, 1);
+             vTaskDelay(pdMS_TO_TICKS(200)); // tempo de vibração
+             gpio_put(VIBRADOR, 0);
+         }
+     }
+ }
+  
  void uart_task(void *p) {
-    adc_t adc;
-
-    while (1) {
-        if (!xQueueReceive(xQueueAdc, &adc, portMAX_DELAY))
-            continue;
-
-        // 1) botão LIGA (axis==4) faz toggle do semáforo:
-        if (adc.axis == 4) {
-            // se estava liberado, toma-o (desliga)
-            if (xSemaphoreTake(xEnableSemaphore, 0) == pdTRUE) {
-                // agora semáforo está “desligado”
-                // (você poderia acionar um LED aqui para feedback)
-            }
-            else {
-                // se estava desligado, libera-o (liga)
-                xSemaphoreGive(xEnableSemaphore);
-            }
-            continue;
-        }
-
-        // 2) qualquer outro axis só passa se semáforo estiver liberado
-        if (xSemaphoreTake(xEnableSemaphore, 0) != pdTRUE) {
-            // semáforo fechado → ignora evento
-            continue;
-        }
-        // devolve o token para que o semáforo permaneça liberado
-        xSemaphoreGive(xEnableSemaphore);
-
-        // 3) processa os outros botões e sticks normalmente
-        if (adc.axis == 5) {
-            putchar('q'); putchar(adc.val ? '1' : '2');
-            continue;
-        }
-        if (adc.axis == 6) {
-            putchar('e'); putchar(adc.val ? '1' : '2');
-            continue;
-        }
-        if (adc.axis == 7) {
-            putchar('r'); putchar(adc.val ? '1' : '2');
-            continue;
-        }
-        if (adc.axis == 8) {
-            putchar('u'); putchar(adc.val ? '1' : '2');
-            continue;
-        }
-        if (adc.axis == 1) {
-            if (adc.val >  200) putchar('s');
-            if (adc.val < -200) putchar('w');
-            continue;
-        }
-        if (adc.axis == 0) {
-            if (adc.val >  200) putchar('d');
-            if (adc.val < -200) putchar('a');
-            continue;
-        }
-        if (adc.axis == 3) {
-            if (adc.val >  200) putchar('j');
-            if (adc.val < -200) putchar('b');
-            continue;
-        }
-        // qualquer outro axis você pode simplesmente ignorar
-    }
-}
-
-
+     adc_t adc;
  
- // Callback único para os 5 botões
+     while (1) {
+         if (!xQueueReceive(xQueueAdc, &adc, portMAX_DELAY))
+             continue;
+ 
+         if (adc.axis == 4) {
+             if (xSemaphoreTake(xEnableSemaphore, 0) == pdTRUE) {
+                 // fecha semáforo
+             } else {
+                 xSemaphoreGive(xEnableSemaphore);
+             }
+             continue;
+         }
+ 
+         if (xSemaphoreTake(xEnableSemaphore, 0) != pdTRUE) {
+             continue;
+         }
+         xSemaphoreGive(xEnableSemaphore);
+ 
+         if (adc.axis == 5) { // q
+             putchar('q'); putchar(adc.val ? '1' : '2');
+             if (adc.val == 1) xSemaphoreGive(xVibeSemaphore);
+             continue;
+         }
+         if (adc.axis == 6) { putchar('e'); putchar(adc.val ? '1' : '2'); continue; }
+         if (adc.axis == 7) { putchar('r'); putchar(adc.val ? '1' : '2'); continue; }
+         if (adc.axis == 8) { putchar('u'); putchar(adc.val ? '1' : '2'); continue; }
+         if (adc.axis == 1) {
+             if (adc.val > 200) putchar('s');
+             if (adc.val < -200) putchar('w');
+             continue;
+         }
+         if (adc.axis == 0) {
+             if (adc.val > 200) putchar('d');
+             if (adc.val < -200) putchar('a');
+             continue;
+         }
+         if (adc.axis == 3) {
+             if (adc.val > 200) putchar('j');
+             if (adc.val < -200) putchar('b');
+             continue;
+         }
+     }
+ }
+  
  void btn_callback(uint gpio, uint32_t events) {
      uint8_t axis;
      if (gpio == BTN_LIGA)      axis = 4;
@@ -225,40 +194,45 @@
      else if (gpio == BTN_PIKA)  axis = 7;
      else if (gpio == BTN_PAUSA) axis = 8;
      else return;
-
-     if (axis == 4) {
-        if (events == GPIO_IRQ_EDGE_FALL) {
-            adc_t ev = { .axis = 4, .val = 1 };
-            xQueueSendFromISR(xQueueAdc, &ev, NULL);
-        }
-        return;}
  
-     if (events == GPIO_IRQ_EDGE_FALL) {       // borda de descida
-         adc_t adc = { .axis = axis, .val = 1 };
-         xQueueSendFromISR(xQueueAdc, &adc, NULL);
+     if (axis == 4) {
+         if (events == GPIO_IRQ_EDGE_FALL) {
+             adc_t ev = { .axis = 4, .val = 1 };
+             xQueueSendFromISR(xQueueAdc, &ev, NULL);
+         }
+         return;
      }
-     else if (events == GPIO_IRQ_EDGE_RISE) {  // borda de subida
-         adc_t adc = { .axis = axis, .val = 0 };
-         xQueueSendFromISR(xQueueAdc, &adc, NULL);
+ 
+     if (events == GPIO_IRQ_EDGE_FALL) {
+         adc_t ev = { .axis = axis, .val = 1 };
+         xQueueSendFromISR(xQueueAdc, &ev, NULL);
+     } else if (events == GPIO_IRQ_EDGE_RISE) {
+         adc_t ev = { .axis = axis, .val = 0 };
+         xQueueSendFromISR(xQueueAdc, &ev, NULL);
      }
  }
- 
+  
  int main() {
      stdio_init_all();
-
+ 
      gpio_init(LED_LIGA);
      gpio_set_dir(LED_LIGA, GPIO_OUT);
-     gpio_put(LED_LIGA,0);
-     xQueueAdc = xQueueCreate(32, sizeof(adc_t));
-     xEnableSemaphore = xSemaphoreCreateBinary();
+     gpio_put(LED_LIGA, 0);
  
-     // Configurações individuais dos botões
+     gpio_init(VIBRADOR);
+     gpio_set_dir(VIBRADOR, GPIO_OUT);
+     gpio_put(VIBRADOR, 0);
+ 
+     xQueueAdc        = xQueueCreate(32, sizeof(adc_t));
+     xEnableSemaphore = xSemaphoreCreateBinary();
+     xVibeSemaphore   = xSemaphoreCreateBinary();
+ 
      gpio_init(BTN_LIGA);
      gpio_set_dir(BTN_LIGA, GPIO_IN);
      gpio_pull_up(BTN_LIGA);
      gpio_set_irq_enabled_with_callback(
          BTN_LIGA,
-         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+         GPIO_IRQ_EDGE_FALL,
          true,
          &btn_callback
      );
@@ -268,7 +242,7 @@
      gpio_pull_up(BTN_TROCA);
      gpio_set_irq_enabled_with_callback(
          BTN_TROCA,
-         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+         GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
          true,
          &btn_callback
      );
@@ -278,7 +252,7 @@
      gpio_pull_up(BTN_ATIRA);
      gpio_set_irq_enabled_with_callback(
          BTN_ATIRA,
-         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+         GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
          true,
          &btn_callback
      );
@@ -288,7 +262,7 @@
      gpio_pull_up(BTN_PIKA);
      gpio_set_irq_enabled_with_callback(
          BTN_PIKA,
-         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+         GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
          true,
          &btn_callback
      );
@@ -298,18 +272,19 @@
      gpio_pull_up(BTN_PAUSA);
      gpio_set_irq_enabled_with_callback(
          BTN_PAUSA,
-         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+         GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
          true,
          &btn_callback
      );
+ 
      adc_init();
-
-     // Criação das tarefas
-     xTaskCreate(adc_x_task,   "adc x task",  4095, NULL, 1, NULL);
-     xTaskCreate(adc_y_task,   "adc y task",  4095, NULL, 1, NULL);
-     xTaskCreate(uart_task,    "uart task",   4095, NULL, 1, NULL);
-     xTaskCreate(desh_y_task,  "adc2 y task", 4095, NULL, 1, NULL);
-     xTaskCreate(led_task, "led task", 4095, NULL, 1, NULL);
+ 
+     xTaskCreate(adc_x_task,   "adc_x_task",   4095, NULL, 1, NULL);
+     xTaskCreate(adc_y_task,   "adc_y_task",   4095, NULL, 1, NULL);
+     xTaskCreate(desh_y_task,  "desh_y_task",  4095, NULL, 1, NULL);
+     xTaskCreate(uart_task,    "uart_task",    4095, NULL, 1, NULL);
+     xTaskCreate(led_task,     "led_task",     256,  NULL, 1, NULL);
+     xTaskCreate(vibrate_task, "vibrate_task", 256,  NULL, 1, NULL);
  
      vTaskStartScheduler();
  

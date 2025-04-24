@@ -162,36 +162,59 @@ void uart_task(void *p) {
 
 void btn_liga_callback(uint gpio, uint32_t events) {
     if (events == 0x4) { // borda de descida
+        adc_t adc = { .axis = 4, .val = 1 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     } else if (events == 0x8) { // borda de subida
+        adc_t adc = { .axis = 4, .val = 0 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     }
 }
 
 void btn_troca_callback(uint gpio, uint32_t events) {
-    if (events == 0x4) { // borda de descida
-    } else if (events == 0x8) { // borda de subida
+    if (events == 0x4) {
+        adc_t adc = { .axis = 5, .val = 1 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
+    } else if (events == 0x8) {
+        adc_t adc = { .axis = 5, .val = 0 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     }
 }
 
 void btn_atira_callback(uint gpio, uint32_t events) {
-    if (events == 0x4) { // borda de descida
-    } else if (events == 0x8) { // borda de subida
+    if (events == 0x4) {
+        adc_t adc = { .axis = 6, .val = 1 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
+    } else if (events == 0x8) {
+        adc_t adc = { .axis = 6, .val = 0 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     }
 }
 
 void btn_pika_callback(uint gpio, uint32_t events) {
-    if (events == 0x4) { // borda de descida
-    } else if (events == 0x8) { // borda de subida
+    if (events == 0x4) {
+        adc_t adc = { .axis = 7, .val = 1 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
+    } else if (events == 0x8) {
+        adc_t adc = { .axis = 7, .val = 0 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     }
 }
 
 void btn_pausa_callback(uint gpio, uint32_t events) {
-    if (events == 0x4) { // borda de descida
-    } else if (events == 0x8) { // borda de subida
+    if (events == 0x4) {
+        adc_t adc = { .axis = 8, .val = 1 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
+    } else if (events == 0x8) {
+        adc_t adc = { .axis = 8, .val = 0 };
+        xQueueSendFromISR(xQueueAdc, &adc, 0);
     }
 }
 
+
 int main() {
     stdio_init_all();
+
+    xQueueAdc = xQueueCreate(32, sizeof(adc_t));
 
     // Configuração do botão BTN_LIGA com interrupção
     gpio_init(BTN_LIGA);
@@ -247,7 +270,7 @@ int main() {
     );
 
 
-    xQueueAdc = xQueueCreate(32, sizeof(adc_t));
+    
 
     xTaskCreate(adc_x_task, "adc x task", 4095, NULL, 1, NULL);
     xTaskCreate(adc_y_task, "adc y task", 4095, NULL, 1, NULL);

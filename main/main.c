@@ -135,17 +135,35 @@ void uart_task(void *p) {
     while (1) {
         if (xQueueReceive(xQueueAdc, &adc, portMAX_DELAY)) {
             if (adc.axis == 5) {
-                if (adc.val == 1) {
-                    putchar('q');
-                    putchar('1');   // enviado q1
-                }
-                else if (adc.val == 0) {
-                    putchar('q');
-                    putchar('2');   // enviado q2
-                }
+                // branco → q
+                putchar('q');
+                putchar(adc.val ? '1' : '2');
                 continue;
             }
-            else if (adc.axis == 1) {
+    
+            if (adc.axis == 6) {
+                // azul → e
+                putchar('e');
+                putchar(adc.val ? '1' : '2');
+                continue;
+            }
+    
+            if (adc.axis == 7) {
+                // verde → r
+                putchar('r');
+                putchar(adc.val ? '1' : '2');
+                continue;
+            }
+    
+            if (adc.axis == 8) {
+                // vermelho → u
+                putchar('u');
+                putchar(adc.val ? '1' : '2');
+                continue;
+            }
+            
+            
+            if (adc.axis == 1) {
                 if (adc.val > 200) {
                     putchar('s');  // stick para cima
                 }
@@ -153,7 +171,7 @@ void uart_task(void *p) {
                     putchar('w');  // stick para baixo
                 }
             }
-            else if (adc.axis == 0) {
+            if (adc.axis == 0) {
                 if (adc.val > 200) {
                     putchar('d');  // stick para direita
                 }
@@ -161,20 +179,10 @@ void uart_task(void *p) {
                     putchar('a');  // stick para esquerda
                 }
             }
-            else {
-                int16_t val = adc.val;
-                uint8_t axis = adc.axis;
-                uint8_t val_0 = val & 0xFF;
-                uint8_t val_1 = (val >> 8) & 0xFF;
-                uint8_t sync  = 0xFF;
-                putchar(sync);
-                putchar(axis);
-                putchar(val_0);
-                putchar(val_1);
-            }
         }
     }
-}
+  }
+
 
  
  // Callback único para os 5 botões

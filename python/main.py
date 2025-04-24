@@ -18,6 +18,7 @@ def move_mouse(axis, value):
     elif axis == 1:
         pyautogui.moveRel(0, value)
 
+
 def controle(ser):
     """
     Loop principal que lê bytes da porta serial em loop infinito.
@@ -48,8 +49,8 @@ def controle(ser):
         except UnicodeDecodeError:
             char = None
 
-        # TRATAMENTO EXCLUSIVO DE q1 / q2
-        if char == 'q':
+        # TRATAMENTO EXCLUSIVO DE q, e, r, t, u
+        if char in ('q', 'e', 'r', 't', 'u'):
             flag = ser.read(1)
             if not flag:
                 continue
@@ -58,16 +59,15 @@ def controle(ser):
             except UnicodeDecodeError:
                 continue
 
-            if code == '1':  # botão pressionado
-                if 'q' not in pressed:
-                    pyautogui.keyDown('q')
-                    pressed.add('q')
-                    print("PRESSIONADO: q")
-            elif code == '2':  # botão solto
-                if 'q' in pressed:
-                    pyautogui.keyUp('q')
-                    pressed.remove('q')
-                    print("SOLTO: q")
+            # '1' = pressionado, '2' = solto
+            if code == '1' and char not in pressed:
+                pyautogui.keyDown(char)
+                pressed.add(char)
+                print(f"PRESSIONADO: {char}")
+            elif code == '2' and char in pressed:
+                pyautogui.keyUp(char)
+                pressed.remove(char)
+                print(f"SOLTO: {char}")
             continue
 
         # teclas WASD seguem igual (com timeout para soltar)
@@ -90,8 +90,6 @@ def controle(ser):
         axis, value = parse_data(data)
         move_mouse(axis, value)
         print(f"MOUSE: eixo={axis}, val={value}")
-
-
 
 
 def serial_ports():
@@ -125,6 +123,7 @@ def serial_ports():
         except (OSError, serial.SerialException):
             pass
     return result
+
 
 def parse_data(data):
     """Interpreta os dados recebidos do buffer (axis + valor)."""

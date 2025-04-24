@@ -35,7 +35,7 @@ void adc_x_task(void *p) {
         
         uint16_t result = adc_read();
         int16_t raw_value = (result - 2047) / 7.96;
-        if (raw_value > -30 && raw_value < 30) {
+        if (raw_value > -90 && raw_value < 90) {
             raw_value = 0;
         }
         if (count < 5) {
@@ -72,7 +72,7 @@ void adc_y_task(void *p) {
         
         uint16_t result = adc_read();
         int16_t raw_value = (result - 2047) / 7.96;
-        if (raw_value > -30 && raw_value < 30) {
+        if (raw_value > -130 && raw_value < 130) {
             raw_value = 0;
         }
         
@@ -86,14 +86,16 @@ void adc_y_task(void *p) {
         }
         index = (index + 1) % 5;
         int mediamovel = sum / 5;
-        
-        adc_t adc;
-        adc.axis = 1;  
-        adc.val = mediamovel;
-        if (adc.val != 0){
-            xQueueSend(xQueueAdc, &adc, 0);
 
-        }        
+        if ( mediamovel < -100 && mediamovel > 100){
+            adc_t adc;
+            adc.axis = 1;  
+            adc.val = mediamovel;
+            if (adc.val != 0){
+                xQueueSend(xQueueAdc, &adc, 0);
+        }
+        }
+                
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -105,12 +107,11 @@ void desh_y_task(void *p){
     int count = 0;
     while(1){
         adc_init();
-        adc_gpio_init(28); //dps colocar o numero q agt escolher aqui
-        adc_select_input(2); //input vai depender daquela tabela
+        adc_gpio_init(28); 
+        adc_select_input(2); 
 
         uint16_t result = adc_read();
         int16_t raw_value = (result-2047)/7.96;
-        printf("analog2: %d", raw_value);
         if (raw_value > -200 && raw_value < 200){
             raw_value = 0;
         }

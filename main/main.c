@@ -137,7 +137,13 @@ void uart_task(void *p) {
             if (adc.axis == 5) {
                 if (adc.val == 1) {
                     putchar('q');
+                    putchar('1');   // enviado q1
                 }
+                else if (adc.val == 0) {
+                    putchar('q');
+                    putchar('2');   // enviado q2
+                }
+                continue;
             }
             else if (adc.axis == 1) {
                 if (adc.val > 200) {

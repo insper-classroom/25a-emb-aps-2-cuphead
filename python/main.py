@@ -21,35 +21,57 @@ def move_mouse(axis, value):
 def controle(ser):
     """
     Loop principal que lê bytes da porta serial em loop infinito.
-    Pode receber:
-      1) Um sync byte 0xFF seguido de 3 bytes (axis + valor baixo + valor alto);
-      2) Uma tecla ASCII: 'w', 'a', 's', 'd' ou 'q' (seu botão Troca mapeado como 'q').
-    Além disso, simula keyDown/Up para WASD e para q.
+    Agora trata q1 como keyDown('q') e q2 como keyUp('q').
     """
     pressed = set()
-    last_time = {}
-    RELEASE_DELAY = 0.2
-
+    last_time = {}          # ← aqui inicializamos o dict
+    RELEASE_DELAY = 0.2     # ← opcional, se quiser manter timeout para WASD
     ser.timeout = 0.05
 
     while True:
         b = ser.read(1)
         now = time.time()
 
+        # Se não veio nada, ainda podemos soltar teclas WASD após RELEASE_DELAY
         if not b:
             for key in list(pressed):
-                if now - last_time.get(key, 0) > RELEASE_DELAY:
+                # libera WASD caso passe do delay
+                if key in ('w','a','s','d') and now - last_time.get(key, 0) > RELEASE_DELAY:
                     pyautogui.keyUp(key)
                     pressed.remove(key)
                     print(f"SOLTO: {key}")
             continue
 
+        # tenta decodificar como ASCII
         try:
             char = b.decode('ascii')
         except UnicodeDecodeError:
             char = None
 
-        if char in ('q', 'w', 'a', 's', 'd'):
+        # TRATAMENTO EXCLUSIVO DE q1 / q2
+        if char == 'q':
+            flag = ser.read(1)
+            if not flag:
+                continue
+            try:
+                code = flag.decode('ascii')
+            except UnicodeDecodeError:
+                continue
+
+            if code == '1':  # botão pressionado
+                if 'q' not in pressed:
+                    pyautogui.keyDown('q')
+                    pressed.add('q')
+                    print("PRESSIONADO: q")
+            elif code == '2':  # botão solto
+                if 'q' in pressed:
+                    pyautogui.keyUp('q')
+                    pressed.remove('q')
+                    print("SOLTO: q")
+            continue
+
+        # teclas WASD seguem igual (com timeout para soltar)
+        if char in ('w', 'a', 's', 'd'):
             last_time[char] = now
             if char not in pressed:
                 pyautogui.keyDown(char)
@@ -57,11 +79,10 @@ def controle(ser):
                 print(f"PRESSIONADO: {char}")
             continue
 
-        # Se não for ASCII de interesse, deve ser pacote binário
+        # pacotes binários de eixos para mover o mouse
         if b[0] != 0xFF:
             continue
 
-        # Lê axis + valor_low + valor_high
         data = ser.read(3)
         if len(data) < 3:
             continue
@@ -69,6 +90,8 @@ def controle(ser):
         axis, value = parse_data(data)
         move_mouse(axis, value)
         print(f"MOUSE: eixo={axis}, val={value}")
+
+
 
 
 def serial_ports():

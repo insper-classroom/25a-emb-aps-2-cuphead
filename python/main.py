@@ -7,7 +7,7 @@ from tkinter import ttk
 from tkinter import messagebox
 from time import sleep
 
-ser = serial.Serial('/dev/ttyACM0', 115200)
+ser = serial.Serial('/dev/ttyACM1', 115200)
 
 def move_mouse(axis, value):
     """Move o mouse de acordo com o eixo e valor recebidos."""

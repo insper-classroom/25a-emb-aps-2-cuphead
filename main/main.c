@@ -129,24 +129,42 @@
          vTaskDelay(pdMS_TO_TICKS(50));
      }
  }
- 
- // UART task: envia valores da fila pela porta serial
- void uart_task(void *p) {
-     adc_t adc;
-     while (1) {
-         if (xQueueReceive(xQueueAdc, &adc, portMAX_DELAY)) {
-             int16_t val = adc.val;
-             uint8_t axis = adc.axis;
-             uint8_t val_0 = val & 0xFF;
-             uint8_t val_1 = (val >> 8) & 0xFF;
-             uint8_t sync = 0xFF;
-             putchar(sync);
-             putchar(axis);
-             putchar(val_0);
-             putchar(val_1);
-         }
-     }
- }
+
+void uart_task(void *p) {
+    adc_t adc;
+    while (1) {
+        if (xQueueReceive(xQueueAdc, &adc, portMAX_DELAY)) {
+            if (adc.axis == 1) {
+                if (adc.val > 200) {
+                    putchar('w');  // stick para cima
+                }
+                else if (adc.val < -200) {
+                    putchar('s');  // stick para baixo
+                }
+            }
+            else if (adc.axis == 0) {
+                if (adc.val > 200) {
+                    putchar('d');  // stick para direita
+                }
+                else if (adc.val < -200) {
+                    putchar('a');  // stick para esquerda
+                }
+            }
+            else {
+                int16_t val = adc.val;
+                uint8_t axis = adc.axis;
+                uint8_t val_0 = val & 0xFF;
+                uint8_t val_1 = (val >> 8) & 0xFF;
+                uint8_t sync  = 0xFF;
+                putchar(sync);
+                putchar(axis);
+                putchar(val_0);
+                putchar(val_1);
+            }
+        }
+    }
+}
+
  
  // Callback único para os 5 botões
  void btn_callback(uint gpio, uint32_t events) {

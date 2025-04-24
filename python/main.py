@@ -19,22 +19,35 @@ def move_mouse(axis, value):
 def controle(ser):
     """
     Loop principal que lê bytes da porta serial em loop infinito.
-    Aguarda o byte 0xFF e então lê 3 bytes: axis (1 byte) + valor (2 bytes).
+    Pode receber:
+      1) Um sync byte 0xFF seguido de 3 bytes (axis + valor baixo + valor alto);
+      2) Uma tecla ASCII: 'w', 'a', 's' ou 'd'.
     """
     while True:
-        # Aguardar byte de sincronização
-        sync_byte = ser.read(size=1)
-        if not sync_byte:
+        b = ser.read(size=1)
+        if not b:
             continue
-        if sync_byte[0] == 0xFF:
-            # Ler 3 bytes (axis + valor(2b))
-            data = ser.read(size=3)
-            if len(data) < 3:
-                continue
-            print(data)
-            axis, value = parse_data(data)
-            move_mouse(axis, value)
-            print(f"MOUSE: eixo={axis}, val={value}")
+
+        try:
+            char = b.decode('ascii')
+        except UnicodeDecodeError:
+            char = None
+
+        if char in ('w', 'a', 's', 'd'):
+            pyautogui.press(char)
+            print(f"TECLA: {char}")
+            continue
+
+        if b[0] != 0xFF:
+            continue
+
+        data = ser.read(size=3)
+        if len(data) < 3:
+            continue
+
+        axis, value = parse_data(data)
+        move_mouse(axis, value)
+        print(f"MOUSE: eixo={axis}, val={value}")
 
 
 def serial_ports():

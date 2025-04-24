@@ -122,7 +122,7 @@
          int mediamovel = sum / 5;
  
          adc_t adc = { .axis = 3, .val = mediamovel };
-         if (adc.val > 200) {
+         if (adc.val > 200 || adc.val < -200) {
              xQueueSend(xQueueAdc, &adc, 0);
          }
  
@@ -178,6 +178,15 @@ void uart_task(void *p) {
                 else if (adc.val < -200) {
                     putchar('a');  // stick para esquerda
                 }
+            }
+            if (adc.axis == 3){
+                if (adc.val > 200){
+                    putchar('j');
+                }
+                else if (adc.val < -200){
+                    putchar('b');
+                }
+
             }
         }
     }

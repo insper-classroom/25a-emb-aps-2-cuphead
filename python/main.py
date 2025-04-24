@@ -37,7 +37,7 @@ def controle(ser):
         if not b:
             for key in list(pressed):
                 # libera WASD caso passe do delay
-                if key in ('w','a','s','d') and now - last_time.get(key, 0) > RELEASE_DELAY:
+                if key in ('w','a','s','d','j','b') and now - last_time.get(key, 0) > RELEASE_DELAY:
                     pyautogui.keyUp(key)
                     pressed.remove(key)
                     print(f"SOLTO: {key}")
@@ -71,7 +71,7 @@ def controle(ser):
             continue
 
         # teclas WASD seguem igual (com timeout para soltar)
-        if char in ('w', 'a', 's', 'd'):
+        if char in ('w', 'a', 's', 'd','b','j'):
             last_time[char] = now
             if char not in pressed:
                 pyautogui.keyDown(char)
